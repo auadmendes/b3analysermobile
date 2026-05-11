@@ -1,98 +1,158 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useAuth, useUser } from '@clerk/clerk-expo';
+import { useRouter } from 'expo-router';
+import { ChevronRight, LogOut, Sparkles, User as UserIcon, Wallet } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function PortfolioScreen() {
+  const { user, isLoaded: userLoaded } = useUser();
+  const { signOut, isLoaded: authLoaded } = useAuth();
+  const router = useRouter();
+  
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [assets, setAssets] = useState<any[]>([]);
 
-export default function HomeScreen() {
+  useEffect(() => {
+    if (userLoaded && user?.id) {
+      fetchPortfolio();
+    }
+  }, [userLoaded, user?.id]);
+
+  const fetchPortfolio = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/api/portfolio?userId=${user?.id}`
+      );
+      const json = await response.json();
+      setAssets(json);
+    } catch (error) {
+      console.error("Erro ao buscar carteira:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPortfolio();
+  };
+
+  if (!userLoaded || !authLoaded) {
+    return (
+      <View className="flex-1 bg-white justify-center items-center">
+        <ActivityIndicator size="large" color="#4f46e5" />
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-white justify-center items-center">
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text className="text-slate-400 mt-4 font-medium">Sincronizando ativos...</Text>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View className="flex-1 bg-white">
+      {/* Header Fixo */}
+      <View className="pt-16 px-6 pb-4 flex-row justify-between items-center border-b border-slate-50 bg-white">
+        <View className="flex-row items-center">
+          {user?.imageUrl ? (
+            <Image source={{ uri: user.imageUrl }} className="w-10 h-10 rounded-full border border-slate-100" />
+          ) : (
+            <View className="bg-slate-100 p-2 rounded-full">
+              <UserIcon size={20} color="#64748b" />
+            </View>
+          )}
+          <View className="ml-3">
+            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Olá, {user?.firstName}</Text>
+            <Text className="text-slate-900 text-xl font-black">Minha Carteira</Text>
+          </View>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <TouchableOpacity onPress={() => signOut()} className="p-2 bg-red-50 rounded-2xl">
+          <LogOut size={18} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+
+      {/* ScrollView com Refresh Control */}
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4f46e5" />
+        }
+      >
+        {/* CARD DE ANÁLISE IA */}
+        <TouchableOpacity 
+          onPress={() => router.push("/analysis")}
+          className="bg-indigo-600 p-6 rounded-[32px] mb-8 shadow-xl shadow-indigo-200 flex-row items-center justify-between"
+        >
+          <View className="flex-1">
+            <View className="flex-row items-center mb-2">
+              <Sparkles size={18} color="white" />
+              <Text className="text-indigo-100 text-[10px] font-black ml-2 uppercase tracking-widest">Premium AI</Text>
+            </View>
+            <Text className="text-white text-xl font-black">Análise da Carteira</Text>
+            <Text className="text-indigo-100 text-xs mt-1 opacity-80">Verifique a saúde dos seus investimentos</Text>
+          </View>
+          <View className="bg-indigo-500 p-3 rounded-2xl">
+            <ChevronRight size={24} color="white" />
+          </View>
+        </TouchableOpacity> 
+
+        {/* LISTAGEM DE ATIVOS */}
+        {assets.length === 0 ? (
+          <View className="items-center mt-20">
+            <Text className="text-slate-400 font-medium">Nenhum ativo na carteira.</Text>
+          </View>
+          
+        ) : (
+          assets.map((item, index) => {
+            // Lógica de Cores Condicional
+            const isFII = item.type === 'FII' || item.type === 'FUNDO_IMOBILIARIO';
+            const iconBgColor = isFII ? 'bg-amber-100' : 'bg-indigo-50';
+            const iconColor = isFII ? '#d97706' : '#4f46e5';
+
+            return (
+              <TouchableOpacity 
+                key={index}
+                onPress={() => router.push(`/ticker/${item.ticker}`)}
+                activeOpacity={0.7}
+                className="bg-white border border-slate-100 p-5 rounded-[32px] mb-4 flex-row items-center justify-between shadow-sm shadow-slate-200"
+              >
+                <View className="flex-row items-center">
+                  <View className={`${iconBgColor} p-4 rounded-2xl mr-4`}>
+                    <Wallet size={20} color={iconColor} />
+                  </View>
+                  <View>
+                    <Text className="font-black text-slate-950 text-lg tracking-tight">{item.ticker}</Text>
+                    <Text className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
+                      {isFII ? 'Fundo Imobiliário' : 'Ação B3'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="flex-row items-center">
+                  <View className="items-end mr-3">
+                    <Text className="font-black text-slate-900 text-base">{item.quantity} un.</Text>
+                    <View className="flex-row items-center">
+                       <Text className="text-emerald-500 text-[10px] font-bold">↗ +2.5%</Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={16} color="#cbd5e1" />
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </ScrollView>
+      
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});

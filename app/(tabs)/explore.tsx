@@ -1,112 +1,113 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import IndicatorCard from '@/components/indicatorCard';
+import { AlertTriangle, Info, Search } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+export default function AnalysisScreen() {
+  const [ticker, setTicker] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<any>(null);
 
-export default function TabTwoScreen() {
+  const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  if (!EXPO_PUBLIC_API_URL) {
+    throw new Error("Faltando EXPO_PUBLIC_API_URL no arquivo .env");
+  }
+
+  const fetchAnalysis = async () => {
+    if (!ticker) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${EXPO_PUBLIC_API_URL}/api/analyze?ticker=${ticker}`);
+      const json = await response.json();
+      setData(json.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ paddingBottom: 100 }}>
+      <View className="p-6 pt-16">
+        <Text className="text-3xl font-black text-slate-900 mb-6">Análise B3</Text>
+
+        {/* Input de Busca Refinado */}
+        <View className="flex-row bg-white rounded-2xl border border-slate-200 items-center px-4 mb-8 shadow-sm">
+          <Search size={18} color="#64748b" />
+          <TextInput
+            className="flex-1 h-14 ml-3 text-slate-900 font-bold"
+            placeholder="Ex: BBAS3"
+            placeholderTextColor="#94a3b8"
+            value={ticker}
+            onChangeText={setTicker}
+            autoCapitalize="characters"
+          />
+          <TouchableOpacity 
+            onPress={fetchAnalysis}
+            className="bg-indigo-600 px-5 py-2.5 rounded-xl"
+          >
+            <Text className="text-white font-bold">Analisar</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading && <ActivityIndicator size="large" color="#4f46e5" className="mt-10" />}
+
+        {data && !loading && (
+          <View>
+            {/* Header: Nome em cima, Preço grande embaixo */}
+            <View className="mb-6">
+              <Text className="text-4xl font-black text-slate-900 leading-none">{data.ticker}</Text>
+              <Text className="text-slate-500 font-medium text-lg mt-1" numberOfLines={2}>
+                {data.name}
+              </Text>
+              <View className="flex-row items-baseline mt-2">
+                <Text className="text-3xl font-black text-indigo-600">R$ {data.price.toFixed(2)}</Text>
+              </View>
+            </View>
+
+            {/* Banner de Estratégia */}
+            <View className="bg-indigo-900 p-6 rounded-3xl mb-6 shadow-md">
+              <View className="flex-row items-center mb-1">
+                <Info size={14} color="#c7d2fe" />
+                <Text className="text-indigo-200 text-xs font-bold uppercase tracking-widest ml-2">Sugestão Técnica</Text>
+              </View>
+              <Text className="text-white text-xl font-bold">{data.strategy.fit}</Text>
+            </View>
+
+            {/* Grid de Indicadores: 2 por linha */}
+            <Text className="text-slate-400 font-bold uppercase text-[10px] mb-3 tracking-widest ml-1">Indicadores Chave</Text>
+            <View className="flex-row flex-wrap justify-between">
+              {data.indicators.map((ind: any, i: number) => (
+                <View key={i} style={{ width: '48%' }} className="mb-3">
+                   <IndicatorCard 
+                    title={ind.title} 
+                    value={`${ind.value}${ind.suffix}`} 
+                    label={ind.text} 
+                  />
+                </View>
+              ))}
+            </View>
+
+            {/* Seção de Riscos com visual de "Card" */}
+            <View className="bg-red-50 p-6 rounded-3xl border border-red-100 mt-4">
+              <View className="flex-row items-center mb-4">
+                <View className="bg-red-500 p-1.5 rounded-lg">
+                  <AlertTriangle size={16} color="white" />
+                </View>
+                <Text className="text-red-900 font-black text-lg ml-3">Pontos de Atenção</Text>
+              </View>
+              {data.strategy.risks.map((risk: string, i: number) => (
+                <View key={i} className="flex-row mb-2">
+                  <Text className="text-red-400 mr-2">•</Text>
+                  <Text className="text-red-800 font-medium flex-1 text-sm leading-5">{risk}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-});
