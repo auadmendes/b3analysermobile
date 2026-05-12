@@ -1,7 +1,8 @@
 import IndicatorCard from '@/components/indicatorCard';
 import { AlertTriangle, Info, Search } from 'lucide-react-native';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function AnalysisScreen() {
   const [ticker, setTicker] = useState('');
@@ -14,14 +15,41 @@ export default function AnalysisScreen() {
     throw new Error("Faltando EXPO_PUBLIC_API_URL no arquivo .env");
   }
 
-  const fetchAnalysis = async () => {
+const fetchAnalysis = async () => {
     if (!ticker) return;
     setLoading(true);
+    
     try {
       const response = await fetch(`${EXPO_PUBLIC_API_URL}/api/analyze?ticker=${ticker}`);
+      
+      // IMPORTANTE: O fetch não joga para o catch em erros 401, 429, 500, etc.
+      if (!response.ok) {
+        throw new Error('Falha na resposta do servidor');
+      }
+
       const json = await response.json();
-      setData(json.data);
+
+      // Verifica se a API retornou sucesso ou se caiu no Rate Limit (sucesso=false)
+      if (json.success) {
+        setData(json.data);
+      } else {
+        // Aqui é onde sua API avisa que deu erro, mas respondeu 200 OK (Cache)
+        setData(json.data); // Seta os dados antigos/cache
+        Toast.show({
+          type: 'info', // 'info' é o que criamos com o botão OK
+          text1: 'Dados de Cache',
+          text2: 'Limite atingido. Exibindo dados desatualizados.',
+          visibilityTime: 8000,
+        });
+      }
+
     } catch (error) {
+      // Aqui cai apenas se o servidor estiver OFF ou se você deu "throw Error" acima
+      Toast.show({
+        type: 'error',
+        text1: 'Erro de Conexão',
+        text2: 'Não foi possível conectar ao servidor.'
+      });
       console.error(error);
     } finally {
       setLoading(false);

@@ -1,4 +1,6 @@
+import { AiOptionsModal } from '@/components/aiOptionsModal';
 import AISummary from '@/components/aISummary';
+import { useUser } from '@clerk/clerk-expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
     AlertTriangle,
@@ -19,15 +21,21 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function TickerDetailScreen() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
-    
+    const { user } = useUser();
+
     // Estados da aplicação
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
+
     const [aiSummary, setAiSummary] = useState<string | null>(null);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiResult, setAiResult] = useState<string | null>(null);
 
     const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -49,7 +57,12 @@ export default function TickerDetailScreen() {
             } else {
                 // Fallback para Rate Limit ou erro controlado do Python
                 setData(json.data); 
-                Alert.alert("Aviso", "Os dados podem estar desatualizados devido a limites da API.");
+                //Alert.alert("Aviso", "Os dados podem estar desatualizados devido a limites da API.");
+                Toast.show({
+                    type: 'info',
+                    text1: 'Limite de API atingido',
+                    text2: 'Os dados podem estar desatualizados.'
+                });
             }
         } catch (error) {
             console.error("Erro ao carregar detalhes:", error);
@@ -58,31 +71,41 @@ export default function TickerDetailScreen() {
         }
     };
 
-    // Função para o componente AISummary chamar o Agente de IA
-    const handleAISynthesis = async () => {
-        try {
-            const response = await fetch(`${EXPO_PUBLIC_API_URL}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: `Gere uma análise fundamentada sobre o ticker ${id}. Vale a pena investir agora?`,
-                    user_id: "user_luciano_horta" 
-                })
-            });
-            
-            const json = await response.json();
-            return json.response; 
-        } catch (error) {
-            console.error(error);
-            return null;
-        }
-    };
-
+  
     const getIndicatorIcon = (title: string) => {
         const props = { size: 14, color: "#94a3b8" };
         if (title === "P/VP") return <Target {...props} />;
         if (title === "DY") return <TrendingUp {...props} />;
         return <Info {...props} />;
+    };
+
+    // Função para o componente AISummary chamar o Agente de IA
+    const handleAISynthesis = async (focus: string, message: string) => {
+        setModalVisible(false); // Fecha o modal de opções
+        setAiLoading(true);     // Ativa o loading no card do AISummary
+        
+        try {
+            const response = await fetch(`${EXPO_PUBLIC_API_URL}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: `Gere uma análise premium para ${id}. Foco: ${focus}. Pergunta: ${message}`,
+                    user_id: user?.id || "user_visitante" 
+                })
+            });
+            
+            const json = await response.json();
+            setAiResult(json.response); // Guarda o resultado para exibir no AISummary
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Erro", "Não foi possível gerar o insight agora.");
+            Toast.show({
+                    type: 'info',
+                    text1: 'Não foi possível gerar o insight agora.'
+                });
+        } finally {
+            setAiLoading(false);
+        }
     };
 
     // --- RENDERIZAÇÃO DE CARREGAMENTO (SKELETON/SPINNER) ---
@@ -168,7 +191,11 @@ export default function TickerDetailScreen() {
                 {/* 2. Componente de Síntese Inteligente (Modular) */}
                 <AISummary 
                     ticker={id as string} 
-                    onGenerate={handleAISynthesis} 
+                    // Quando clicar no botão do componente, apenas abre o modal
+                    onGenerate={() => setModalVisible(true)} 
+                    // Passamos o resultado e o loading para o componente gerenciar o visual
+                    result={aiResult}
+                    loading={aiLoading}
                 />
 
                 {/* 3. Métricas Chave */}
@@ -215,7 +242,7 @@ export default function TickerDetailScreen() {
 
                 {/* 5. Botão de Chat Direto */}
                 <TouchableOpacity 
-                    onPress={() => router.push({ pathname: "/chat/index" as any, params: { ticker: id } })}
+                    onPress={() => router.push({ pathname: "/chat" as any, params: { ticker: id } })}
                     className="bg-slate-900 p-5 rounded-3xl flex-row items-center justify-center mt-4 mb-10 shadow-lg shadow-slate-300"
                 >
                     <MessageSquareText size={20} color="white" />
@@ -223,6 +250,13 @@ export default function TickerDetailScreen() {
                 </TouchableOpacity>
 
             </ScrollView>
+            <AiOptionsModal 
+                isVisible={modalVisible}
+                onClose={() => setModalVisible(false)}
+                onConfirm={handleAISynthesis}
+                title={`Insight Premium: ${id}`}
+                loading={aiLoading}
+            />
         </View>
     );
 }
