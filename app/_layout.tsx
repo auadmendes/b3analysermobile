@@ -3,6 +3,10 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import 'react-native-reanimated';
+
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message'; // 1. Imports do Toast
 
 import "../global.css";
@@ -81,15 +85,18 @@ function InitialLayout() {
 export default function RootLayout() {
   if (!publishableKey) return null;
 
-  return (
+return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
-        {/* Renderiza o layout do app */}
-        <InitialLayout />
-        
-        {/* 3. Renderiza o componente de Toast com a config personalizada */}
-        {/* topOffset ajustado para não colidir com o Header/StatusBar */}
-        <Toast config={toastConfig} topOffset={60} /> 
+        {/* 2. Envolva o layout principal com o GestureHandlerRootView */}
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          
+          <InitialLayout />
+          
+          {/* O Toast pode ficar dentro ou fora, mas o layout do app PRECISA estar dentro */}
+          <Toast config={toastConfig} topOffset={60} /> 
+          
+        </GestureHandlerRootView>
       </ClerkLoaded>
     </ClerkProvider>
   );

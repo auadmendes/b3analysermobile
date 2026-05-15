@@ -1,20 +1,21 @@
 import { AiOptionsModal } from '@/components/aiOptionsModal';
 import AISummary from '@/components/aISummary';
+import { PriceChart } from '@/components/priceChart';
 import { useUser } from '@clerk/clerk-expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
     AlertTriangle,
     BrainCircuit,
     ChevronLeft,
+    Heart,
     Info,
     MessageSquareText,
     Target,
     TrendingUp
 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     ScrollView,
     StatusBar,
     Text,
@@ -28,36 +29,39 @@ export default function TickerDetailScreen() {
     const router = useRouter();
     const { user } = useUser();
 
-    // Estados da aplicação
+    // 1. Estados da aplicação (Sempre no topo)
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
-
-    const [aiSummary, setAiSummary] = useState<string | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiResult, setAiResult] = useState<string | null>(null);
+    const [isFavorited, setIsFavorited] = useState(false);
+    const [addModalVisible, setAddModalVisible] = useState(false);
+    const [isSavingAsset, setIsSavingAsset] = useState(false);
 
     const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+    // 2. Effects (Sempre no topo, após os estados)
     useEffect(() => {
         fetchTickerData();
     }, [id]);
 
+    useEffect(() => {
+        if (user?.id && id) {
+            checkIfIsFavorited();
+        }
+    }, [id, user?.id]);
+
+    // 3. Funções de Busca e Ação
     const fetchTickerData = async () => {
         try {
             setLoading(true);
             const response = await fetch(`${EXPO_PUBLIC_API_URL}/api/analyze?ticker=${id}`);
-            
             if (!response.ok) throw new Error("Erro na rede");
-
             const json = await response.json();
             
-            if (json.success) {
-                setData(json.data);
-            } else {
-                // Fallback para Rate Limit ou erro controlado do Python
-                setData(json.data); 
-                //Alert.alert("Aviso", "Os dados podem estar desatualizados devido a limites da API.");
+            setData(json.data);
+            if (!json.success) {
                 Toast.show({
                     type: 'info',
                     text1: 'Limite de API atingido',
@@ -71,7 +75,127 @@ export default function TickerDetailScreen() {
         }
     };
 
-  
+    const checkIfIsFavorited = async () => {
+        try {
+            const response = await fetch(
+                `${EXPO_PUBLIC_API_URL}/api/favorites/check/${user?.id}/${id}`
+            );
+            const json = await response.json();
+            setIsFavorited(json.isFavorited);
+        } catch (error) {
+            console.error("Erro ao verificar favorito:", error);
+        }
+    };
+
+    const handleFavorite = async () => {
+        try {
+            const response = await fetch(`${EXPO_PUBLIC_API_URL}/api/favorites`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ticker: id,
+                    user_id: user?.id
+                })
+            });
+            const json = await response.json();
+            if (json.success) {
+                setIsFavorited(!isFavorited);
+                Toast.show({ 
+                    type: 'success', 
+                    text1: isFavorited ? 'Removido' : 'Adicionado', 
+                    text2: isFavorited ? 'Removido dos favoritos' : 'Adicionado aos favoritos!' 
+                });
+            }
+        } catch (error) {
+            Toast.show({ type: 'error', text1: 'Erro', text2: 'Não foi possível favoritar.' });
+        }
+    };
+
+      // 1. Criamos a lógica de cálculo (useMemo para performance)
+      const simulacaoCalculada = useMemo(() => {
+        if (!data?.chart_data || data.chart_data.length < 2) return null;
+    
+        const valorInicialInvestido = 1000; // Valor base para o exemplo
+        const precoInicial = data.chart_data[0].value;
+        const precoAtual = data.price;
+    
+        const quantidadeCotas = valorInicialInvestido / precoInicial;
+        const valorFinal = quantidadeCotas * precoAtual;
+        const lucroAbsoluto = valorFinal - valorInicialInvestido;
+        const rendimentoPercentual = ((valorFinal - valorInicialInvestido) / valorInicialInvestido) * 100;
+    
+        return {
+          total: valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          lucro: lucroAbsoluto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          percentual: rendimentoPercentual.toFixed(2),
+          isPositivo: rendimentoPercentual >= 0
+        };
+      }, [data]);
+
+    // const handleConfirmAddAsset = async (qty: number, avgPrice: number) => {
+    // if (!qty || !avgPrice) {
+    //     Alert.alert("Erro", "Preencha todos os campos.");
+    //     return;
+    // }
+
+    // try {
+    //     setIsSavingAsset(true);
+    //     const response = await fetch(`${EXPO_PUBLIC_API_URL}/api/portfolio/add`, {
+    //         method: 'POST',
+    //         headers: { 'Content-Type': 'application/json' },
+    //         body: JSON.stringify({
+    //             ticker: id,
+    //             user_id: user?.id,
+    //             quantity: qty,
+    //             average_price: avgPrice,
+    //             type: id.toString().includes('11') ? 'FII' : 'ACAO' // Lógica simples para detectar tipo
+    //         })
+    //     });
+
+    //     const json = await response.json();
+    //     if (json.success) {
+    //         setAddModalVisible(false);
+    //         Toast.show({ type: 'success', text1: 'Sucesso!', text2: `${id} adicionado à sua carteira.` });
+    //     }
+    // } catch (error) {
+    //     Alert.alert("Erro", "Não foi possível salvar o ativo.");
+    // } finally {
+    //     setIsSavingAsset(false);
+    // }
+    // };
+
+    // const handleAddToPortfolio = () => {
+    //     setAddModalVisible(true);
+    // };
+
+    const handleAISynthesis = async (focus: string, message: string) => {
+        setModalVisible(false);
+        setAiLoading(true);
+    
+        try {
+        const response = await fetch(`${EXPO_PUBLIC_API_URL}/api/analyze/premium`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+            ticker: data.ticker, // Passamos o ticker isolado
+            focus: focus,        // Foco escolhido no modal (Dividendos, etc)
+            message: message,    // Mensagem customizada
+            user_id: user?.id
+            })
+        });
+
+        const json = await response.json();
+        
+        if (json.success) {
+            setAiResult(json.insight); // Atualiza o card AISummary com o texto técnico
+        }
+        } catch (error) {
+        Toast.show({ type: 'error', text1: 'Erro no Insight', text2: 'Tente novamente.' });
+        } finally {
+        setAiLoading(false);
+        }
+    };
+
     const getIndicatorIcon = (title: string) => {
         const props = { size: 14, color: "#94a3b8" };
         if (title === "P/VP") return <Target {...props} />;
@@ -79,36 +203,9 @@ export default function TickerDetailScreen() {
         return <Info {...props} />;
     };
 
-    // Função para o componente AISummary chamar o Agente de IA
-    const handleAISynthesis = async (focus: string, message: string) => {
-        setModalVisible(false); // Fecha o modal de opções
-        setAiLoading(true);     // Ativa o loading no card do AISummary
-        
-        try {
-            const response = await fetch(`${EXPO_PUBLIC_API_URL}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: `Gere uma análise premium para ${id}. Foco: ${focus}. Pergunta: ${message}`,
-                    user_id: user?.id || "user_visitante" 
-                })
-            });
-            
-            const json = await response.json();
-            setAiResult(json.response); // Guarda o resultado para exibir no AISummary
-        } catch (error) {
-            console.error(error);
-            Alert.alert("Erro", "Não foi possível gerar o insight agora.");
-            Toast.show({
-                    type: 'info',
-                    text1: 'Não foi possível gerar o insight agora.'
-                });
-        } finally {
-            setAiLoading(false);
-        }
-    };
+    
 
-    // --- RENDERIZAÇÃO DE CARREGAMENTO (SKELETON/SPINNER) ---
+    // 4. Renderizações de Estado (Loading / Error)
     if (loading) {
         return (
             <View className="flex-1 bg-white justify-center items-center">
@@ -117,12 +214,11 @@ export default function TickerDetailScreen() {
                     <ActivityIndicator size="large" color="#4f46e5" />
                 </View>
                 <Text className="text-slate-900 font-black text-xl">Analisando {id}</Text>
-                <Text className="text-slate-400 font-medium mt-1">Sincronizando dados fundamentais...</Text>
+                <Text className="text-slate-400 font-medium mt-1">Sincronizando dados...</Text>
             </View>
         );
     }
 
-    // --- RENDERIZAÇÃO DE ERRO ---
     if (!data) {
         return (
             <View className="flex-1 bg-white p-6 justify-center items-center">
@@ -131,23 +227,20 @@ export default function TickerDetailScreen() {
                 <Text className="text-slate-900 font-bold text-lg mt-4 text-center">
                     Não foi possível carregar os dados de {id}
                 </Text>
-                <TouchableOpacity 
-                    onPress={() => router.back()} 
-                    className="bg-indigo-600 px-8 py-3 rounded-2xl mt-6 shadow-md"
-                >
+                <TouchableOpacity onPress={() => router.back()} className="bg-indigo-600 px-8 py-3 rounded-2xl mt-6">
                     <Text className="text-white font-bold">Voltar</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
-    // --- RENDERIZAÇÃO PRINCIPAL ---
+    // 5. Renderização Principal
     return (
         <View className="flex-1 bg-slate-50">
             <StatusBar barStyle="dark-content" />
             <Stack.Screen options={{ headerShown: false }} />
             
-            {/* Header Customizado */}
+            {/* Header com Botões de Ação */}
             <View className="bg-white px-6 pt-14 pb-4 flex-row items-center justify-between border-b border-slate-100 shadow-sm">
                 <TouchableOpacity 
                     onPress={() => router.back()} 
@@ -163,12 +256,23 @@ export default function TickerDetailScreen() {
                     </Text>
                 </View>
 
-                <View className="w-10" />
+                <View className="flex-row items-center">
+                    <TouchableOpacity onPress={handleFavorite} className="mr-2 p-2">
+                        <Heart 
+                            size={24} 
+                            color={isFavorited ? "#ef4444" : "#0f172a"} 
+                            fill={isFavorited ? "#ef4444" : "none"} 
+                        />
+                    </TouchableOpacity>
+                    {/* <TouchableOpacity onPress={handleAddToPortfolio} className="p-2 bg-indigo-600 rounded-lg">
+                        <Plus size={20} color="white" />
+                    </TouchableOpacity> */}
+                </View>
             </View>
 
             <ScrollView className="flex-1" contentContainerStyle={{ padding: 24 }}>
                 
-                {/* 1. Card de Estratégia (Veredito IA) */}
+                {/* Card de Estratégia */}
                 <View className="bg-indigo-600 p-6 rounded-[32px] mb-6 shadow-xl shadow-indigo-100">
                     <View className="flex-row items-center mb-4">
                         <View className="bg-indigo-500 p-2 rounded-lg">
@@ -178,7 +282,7 @@ export default function TickerDetailScreen() {
                     </View>
                     
                     <Text className="text-white text-2xl font-black mb-2">
-                        {data.strategy?.fit || "Análise Indisponível"}
+                        {data?.strategy?.fit || "Estratégia sob análise"}
                     </Text>
                     
                     <Text className="text-indigo-100 text-xs leading-5 opacity-90">
@@ -188,17 +292,55 @@ export default function TickerDetailScreen() {
                     </Text>
                 </View>
 
-                {/* 2. Componente de Síntese Inteligente (Modular) */}
+                {data?.chart_data && <PriceChart data={data.chart_data} />}
+
+                 {simulacaoCalculada && (
+                    <View className="bg-slate-900 rounded-[32px] p-6 mb-6 shadow-xl shadow-slate-300">
+                    <View className="flex-row items-center mb-4">
+                        <View className="bg-indigo-500/20 p-2 rounded-xl">
+                        <TrendingUp size={20} color="#818cf8" />
+                        </View>
+                        <Text className="text-indigo-300 text-[10px] font-bold ml-3 uppercase tracking-widest">
+                        Simulador de Retorno
+                        </Text>
+                    </View>
+    
+                    {/* Corrigido: O texto deve estar todo dentro de um componente Text */}
+                    <Text className="text-slate-400 text-xs mb-1">
+                        Se você tivesse investido{" "}
+                        <Text className="text-white font-bold text-xs">R$ 1.000,00</Text> há 12 meses
+                        em {data.ticker}, hoje você teria:
+                    </Text>
+    
+                    <View className="flex-row items-end justify-between mt-2">
+                        <Text className="text-white text-3xl font-black">
+                        R$ {simulacaoCalculada.total}
+                        </Text>
+                        
+                        <View className={`px-3 py-1 rounded-full ${simulacaoCalculada.isPositivo ? 'bg-emerald-500/20' : 'bg-rose-500/20'}`}>
+                        <Text className={`font-bold text-xs ${simulacaoCalculada.isPositivo ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {simulacaoCalculada.isPositivo ? '+' : ''}{simulacaoCalculada.percentual}%
+                        </Text>
+                        </View>
+                    </View>
+    
+                    <View className="mt-4 pt-4 border-t border-slate-800">
+                        <Text className="text-slate-500 text-[10px]">
+                        * Considera apenas a valorização da cota no período.
+                        </Text>
+                    </View>
+                    </View>
+                )}
+                
+
                 <AISummary 
                     ticker={id as string} 
-                    // Quando clicar no botão do componente, apenas abre o modal
                     onGenerate={() => setModalVisible(true)} 
-                    // Passamos o resultado e o loading para o componente gerenciar o visual
                     result={aiResult}
                     loading={aiLoading}
                 />
 
-                {/* 3. Métricas Chave */}
+                {/* Métricas */}
                 <View className="flex-row items-center justify-between mb-4 px-1">
                     <Text className="text-slate-900 font-black text-lg">Métricas Chave</Text>
                     <View className="bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
@@ -223,7 +365,7 @@ export default function TickerDetailScreen() {
                     ))}
                 </View>
 
-                {/* 4. Riscos e Alertas */}
+                {/* Riscos */}
                 <View className="bg-red-50/30 p-6 rounded-[32px] border border-red-100 mt-2 mb-4">
                     <View className="flex-row items-center mb-4">
                         <View className="bg-red-100 p-2 rounded-xl">
@@ -240,7 +382,6 @@ export default function TickerDetailScreen() {
                     ))}
                 </View>
 
-                {/* 5. Botão de Chat Direto */}
                 <TouchableOpacity 
                     onPress={() => router.push({ pathname: "/chat" as any, params: { ticker: id } })}
                     className="bg-slate-900 p-5 rounded-3xl flex-row items-center justify-center mt-4 mb-10 shadow-lg shadow-slate-300"
@@ -250,6 +391,7 @@ export default function TickerDetailScreen() {
                 </TouchableOpacity>
 
             </ScrollView>
+
             <AiOptionsModal 
                 isVisible={modalVisible}
                 onClose={() => setModalVisible(false)}
@@ -257,6 +399,14 @@ export default function TickerDetailScreen() {
                 title={`Insight Premium: ${id}`}
                 loading={aiLoading}
             />
+
+            {/* <AddAssetModal 
+                isVisible={addModalVisible}
+                onClose={() => setAddModalVisible(false)}
+                onConfirm={handleConfirmAddAsset}
+                ticker={id as string}
+                loading={isSavingAsset}
+            /> */}
         </View>
     );
 }

@@ -1,15 +1,15 @@
 import { Sparkles, X } from 'lucide-react-native';
 import React from 'react';
 import {
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
 } from 'react-native';
 
 interface AiOptionsModalProps {
@@ -74,18 +74,20 @@ export function AiOptionsModal({ isVisible, onClose, onConfirm, title, loading }
               </Text>
               <TextInput 
                 placeholder="Ex: Vale a pena investir mais neste setor?"
-                placeholderTextColor="#94a3b8" // Cor do placeholder mais suave (slate-400)
+                placeholderTextColor="#94a3b8"
+                // Ajustei para bg-slate-50 pois o 500 é muito escuro para texto preto
                 className="bg-slate-50 p-5 rounded-3xl border border-slate-100 text-slate-900 mb-8"
                 
-                // Propriedades que transformam em Textarea:
                 multiline={true} 
-                numberOfLines={4} // Aumentei para 4 para dar mais área visual
-                textAlignVertical="top" // Garante que o texto comece no topo (essencial no Android)
+                numberOfLines={4} 
+                textAlignVertical="top" 
                 
-                // Melhorias de UX:
-                blurOnSubmit={true} // Fecha o teclado ao dar "Enter" (opcional)
-                style={{ minHeight: 120 }} // Garante uma altura mínima fixa independente do número de linhas
+                // --- AS CORREÇÕES PARA O ENTER ---
+                blurOnSubmit={false} // PERMITE que o Enter funcione sem fechar o teclado
+                returnKeyType="default" // Garante que o ícone do teclado seja o de "Enter/Retorno"
+                // ---------------------------------
                 
+                style={{ minHeight: 120 }} 
                 value={message}
                 onChangeText={setMessage}
               />

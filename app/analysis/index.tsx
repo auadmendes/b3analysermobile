@@ -36,7 +36,7 @@ const generateAnalysis = async (focus: string, message: string) => {
   setLoading(true);
 
   try {
-    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/reports/generate`, {
+    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/reports/wallet-checkup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // 2. AGORA ENVIAMOS O FOCO E A MENSAGEM NO BODY
@@ -70,7 +70,7 @@ const generateAnalysis = async (focus: string, message: string) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 p-6 pt-24" showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1 p-6 pt-8" showsVerticalScrollIndicator={false}>
         {!result ? (
           <View className="items-center py-10">
             <View className="bg-indigo-50 p-8 rounded-full mb-6">
@@ -95,7 +95,7 @@ const generateAnalysis = async (focus: string, message: string) => {
 
           </View>
         ) : (
-          <View className="pb-10">
+          <View className="pb-10 mb-10">
             <View className="bg-slate-50 p-6 rounded-[32px] border border-indigo-100">
               <Markdown style={markdownStyles}>{result}</Markdown>
             </View>
@@ -109,7 +109,16 @@ const generateAnalysis = async (focus: string, message: string) => {
   );
 }
 
+// const markdownStyles = StyleSheet.create({
+//   body: { color: '#334155', fontSize: 16, lineHeight: 24 },
+//   heading3: { color: '#4f46e5', fontWeight: '800', marginTop: 15 },
+// });
+
 const markdownStyles = StyleSheet.create({
-  body: { color: '#334155', fontSize: 16, lineHeight: 24 },
-  heading3: { color: '#4f46e5', fontWeight: '800', marginTop: 15 },
+  body: { color: '#334155', fontSize: 14, lineHeight: 22 },
+  strong: { fontWeight: 'bold', color: '#1e1b4b' },
+  heading3: { fontSize: 18, fontWeight: '800', marginTop: 12, marginBottom: 8, color: '#4f4eea' },
+  paragraph: { marginTop: 0, marginBottom: 10 },
+  bullet_list: { marginBottom: 10 },
+  list_item: { flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 4 },
 });

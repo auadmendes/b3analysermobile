@@ -1,9 +1,12 @@
+// import { WalletChart } from '@/components/walletChart';
+import { WalletChart } from '@/components/walletChart';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import {
+  Calendar,
   ChevronRight,
   LogOut,
   PieChart,
@@ -45,14 +48,26 @@ export default function PortfolioScreen() {
   // --- CÁLCULOS DE PATRIMÔNIO ---
   // useMemo evita que o cálculo seja refeito desnecessariamente a cada render
   const totals = useMemo(() => {
-    const totalValue = assets.reduce((acc, asset) => {
-      return acc + (Number(asset.quantity) * Number(asset.averagePrice));
-    }, 0);
+      // 1. Verificação de segurança: Se assets for nulo, indefinido ou não for lista, retorna 0
+      if (!assets || !Array.isArray(assets)) {
+          return {
+              totalInvested: 0,
+              assetCount: 0
+          };
+      }
 
-    return {
-      totalInvested: totalValue,
-      assetCount: assets.length
-    };
+      // 2. Cálculo seguro
+      const totalValue = assets.reduce((acc, asset) => {
+          // Garantimos que quantity e averagePrice sejam números para não somar NaN
+          const qty = Number(asset.quantity) || 0;
+          const price = Number(asset.averagePrice) || 0;
+          return acc + (qty * price);
+      }, 0);
+
+      return {
+          totalInvested: totalValue,
+          assetCount: assets.length
+      };
   }, [assets]);
 
   useEffect(() => {
@@ -140,8 +155,11 @@ export default function PortfolioScreen() {
           <View className="ml-3">
             <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Patrimônio</Text>
             <Text className="text-slate-900 text-xl font-black italic">Minha Carteira</Text>
+
           </View>
+
         </View>
+        
         <TouchableOpacity onPress={() => signOut()} className="p-2 bg-slate-50 rounded-2xl">
           <LogOut size={18} color="#0f172a" />
         </TouchableOpacity>
@@ -172,8 +190,30 @@ export default function PortfolioScreen() {
              <Text className="text-slate-400 text-[10px] font-black uppercase mb-1">Ativos</Text>
              <Text className="text-slate-900 text-lg font-black">{totals.assetCount} Tickers</Text>
           </View>
+
         </View>
 
+
+        <WalletChart 
+          assets={assets} 
+          totalInvested={totals.totalInvested} 
+        />
+
+          <TouchableOpacity 
+              onPress={() => router.push("/dividends" as any)}
+              className="bg-emerald-500 p-6 rounded-[32px] mb-8 flex-row items-center justify-between shadow-lg shadow-emerald-100"
+            >
+              <View className="flex-1">
+                <View className="flex-row items-center mb-1">
+                  <Calendar size={14} color="white" />
+                  <Text className="text-emerald-100 text-[9px] font-black ml-2 uppercase tracking-[2px]">Agenda de Renda</Text>
+                </View>
+                <Text className="text-white text-xl font-black">R$ 450,80 <Text className="text-sm font-medium">este mês</Text></Text>
+              </View>
+              <View className="bg-white/20 p-2 rounded-full">
+                <ChevronRight size={20} color="white" />
+              </View>
+          </TouchableOpacity>
         {/* Card IA Analyser */}
         <TouchableOpacity
           onPress={() => router.push("/analysis")}

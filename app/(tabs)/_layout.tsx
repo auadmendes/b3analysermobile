@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, MessageSquare, Search } from 'lucide-react-native'; // Importamos o ícone de Chat
+import { Heart, Home, MessageSquare, Search } from 'lucide-react-native'; // Importamos Heart
 
 export default function TabLayout() {
   return (
@@ -31,14 +31,24 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Nova Aba de Chat Inteligente */}
+      {/* Nova Aba de Favoritos */}
       <Tabs.Screen
-        name="chat/index" // Nome exato do caminho do arquivo
+        name="favorites" 
+        options={{
+          title: 'Favoritos',
+          tabBarIcon: ({ color }) => <Heart size={24} color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="chat/index"
         options={{
           title: 'Chat IA',
           tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
         }}
       />
+
+
     </Tabs>
   );
 }

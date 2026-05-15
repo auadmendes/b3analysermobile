@@ -1,5 +1,7 @@
+import { useUser } from '@clerk/clerk-expo';
+import * as Clipboard from 'expo-clipboard'; // Importação do Clipboard
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Bot, ChevronLeft, Send } from 'lucide-react-native';
+import { Bot, ChevronLeft, Copy, Send } from 'lucide-react-native'; // Importei o ícone Copy
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,42 +15,46 @@ import {
   View,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import Toast from 'react-native-toast-message'; // Para avisar que copiou
 
 export default function ChatScreen() {
   const { ticker } = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useUser();
   
-  // Estados do Chat
   const [message, setMessage] = useState('');
   const [chatLog, setChatLog] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Estado para controle manual do teclado (Solução para Android)
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // 1. Listeners para monitorar o teclado no Android/iOS
+  // --- FUNÇÃO PARA COPIAR ---
+  const copyToClipboard = async (text: string) => {
+    await Clipboard.setStringAsync(text);
+    Toast.show({
+      type: 'success',
+      text1: 'Copiado!',
+      text2: 'Mensagem copiada para a área de transferência.',
+      position: 'bottom',
+      bottomOffset: 120
+    });
+  };
+
+  // Listeners do teclado (Mantidos)
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
     const showSubscription = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(e.endCoordinates.height);
-      // Rola para o fim quando o teclado abre
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     });
-
-    const hideSubscription = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
-
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
   }, []);
 
-  // 2. Mensagem Inicial
   useEffect(() => {
     const initialText = ticker 
       ? `Olá! Notei que você está analisando **${ticker}**. Como posso te ajudar hoje?` 
@@ -60,9 +66,9 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
-  const sendMessage = async () => {
+const sendMessage = async () => {
     if (!message.trim() || loading) return;
-
+    
     const userMsg = message;
     setChatLog(prev => [...prev, { role: 'user', text: userMsg }]);
     setMessage('');
@@ -74,9 +80,11 @@ export default function ChatScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: ticker ? `[CONTEXTO: ${ticker}] ${userMsg}` : userMsg,
-          user_id: "user_luciano_horta" 
+          // ALTERAÇÃO AQUI: Usando o ID real do usuário logado no Clerk
+          user_id: user?.id || "anonimo" 
         })
       });
+
       const json = await response.json();
       setChatLog(prev => [...prev, { role: 'assistant', text: json.response }]);
     } catch (error) {
@@ -90,15 +98,13 @@ export default function ChatScreen() {
     <View style={{ flex: 1, backgroundColor: 'white' }}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Header */}
       <View className="pt-14 pb-4 px-6 border-b border-slate-100 flex-row items-center bg-white shadow-sm">
         <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-50 rounded-full mr-4">
           <ChevronLeft size={20} color="#0f172a" />
         </TouchableOpacity>
-        <Text className="text-xl font-black text-slate-900">Chat IA</Text>
+        <Text className="text-xl font-black text-slate-900">Chat B3</Text>
       </View>
 
-      {/* Área de Mensagens */}
       <ScrollView 
         ref={scrollViewRef}
         className="flex-1 px-4" 
@@ -114,17 +120,29 @@ export default function ChatScreen() {
               </View>
             )}
             
-            <View className={`max-w-[85%] p-4 rounded-3xl ${
-              msg.role === 'user' 
-                ? 'bg-indigo-600 rounded-tr-none' 
-                : 'bg-slate-100 rounded-tl-none border border-slate-200'
-            }`}>
+            {/* TouchableOpacity para permitir clicar e copiar */}
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              onLongPress={() => copyToClipboard(msg.text)} // COPIA NO CLIQUE LONGO
+              className={`max-w-[85%] p-4 rounded-3xl ${
+                msg.role === 'user' 
+                  ? 'bg-indigo-600 rounded-tr-none' 
+                  : 'bg-slate-100 rounded-tl-none border border-slate-200'
+              }`}
+            >
               {msg.role === 'assistant' ? (
                 <Markdown style={markdownStyles}>{msg.text}</Markdown>
               ) : (
                 <Text className="text-white leading-5 font-medium">{msg.text}</Text>
               )}
-            </View>
+              
+              {/* Indicador discreto de que é possível copiar */}
+              {msg.role === 'assistant' && (
+                <View className="flex-row justify-end mt-2 opacity-20">
+                  <Copy size={10} color="#64748b" />
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
         ))}
 
@@ -136,7 +154,6 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      {/* Input Section - O segredo está no marginBottom dinâmico */}
       <View style={{ 
           marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
           backgroundColor: 'white',
@@ -161,8 +178,6 @@ export default function ChatScreen() {
             <Send size={20} color={message.trim() ? 'white' : '#94a3b8'} />
           </TouchableOpacity>
         </View>
-        
-        {/* Espaçador para SafeArea quando o teclado está fechado */}
         {keyboardHeight === 0 && <View style={{ height: Platform.OS === 'ios' ? 30 : 10 }} />}
       </View>
     </View>
