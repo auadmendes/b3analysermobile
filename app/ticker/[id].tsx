@@ -1,15 +1,18 @@
 import { AiOptionsModal } from '@/components/aiOptionsModal';
 import AISummary from '@/components/aISummary';
+import { DividendHistoryCard } from '@/components/dividendHistoryCard';
+import { InsightButton } from '@/components/InsightButton';
 import { PriceChart } from '@/components/priceChart';
+import { useTicker } from '@/hooks/useTicker';
 import { useUser } from '@clerk/clerk-expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
     AlertTriangle,
     BrainCircuit,
     ChevronLeft,
-    Heart,
     Info,
     MessageSquareText,
+    StarIcon,
     Target,
     TrendingUp
 } from 'lucide-react-native';
@@ -23,6 +26,8 @@ import {
     View
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { FairValueCard } from '../analysis/fairValueCard';
+import { MagicNumberCard } from '../analysis/magicNumberCard';
 
 export default function TickerDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -39,6 +44,7 @@ export default function TickerDetailScreen() {
     const [addModalVisible, setAddModalVisible] = useState(false);
     const [isSavingAsset, setIsSavingAsset] = useState(false);
 
+    const { tickerData, loading: tickerLoading } = useTicker(data?.ticker || "");
     const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
 
     // 2. Effects (Sempre no topo, após os estados)
@@ -258,11 +264,13 @@ export default function TickerDetailScreen() {
 
                 <View className="flex-row items-center">
                     <TouchableOpacity onPress={handleFavorite} className="mr-2 p-2">
-                        <Heart 
-                            size={24} 
-                            color={isFavorited ? "#ef4444" : "#0f172a"} 
-                            fill={isFavorited ? "#ef4444" : "none"} 
-                        />
+                <StarIcon 
+                  size={32} 
+                  // 🌟 Amarelo ouro (#eab308) se estiver ativo, cinza/slate escuro (#334155) se estiver apagado
+                  color={isFavorited ? "#eab308" : "#334155"} 
+                  // 🌟 Preenche o fundo com amarelo se estiver ativo, senão fica transparente ("none")
+                  fill={isFavorited ? "#eab308" : "none"} 
+                />
                     </TouchableOpacity>
                     {/* <TouchableOpacity onPress={handleAddToPortfolio} className="p-2 bg-indigo-600 rounded-lg">
                         <Plus size={20} color="white" />
@@ -365,6 +373,28 @@ export default function TickerDetailScreen() {
                     ))}
                 </View>
 
+                {/* Novos Cards: Preço Justo e Número Mágico */}
+                {tickerData && !tickerLoading && (
+                    <View className="mt-4">
+                        <MagicNumberCard 
+                            ticker={tickerData.symbol}
+                            currentPrice={tickerData.currentPrice}
+                            lastDividend={tickerData.lastDividend} 
+                        />
+        
+                        <FairValueCard 
+                            vpa={tickerData.vpa} 
+                            lpa={tickerData.lpa} 
+                            currentPrice={tickerData.currentPrice} 
+                        />
+                        <View className="px-1">
+                            {/* Seus cards anteriores (Magic Number, Graham...) */}                
+                            <DividendHistoryCard ticker={data.ticker} />
+                        </View>
+                    </View>
+                    
+                )}
+
                 {/* Riscos */}
                 <View className="bg-red-50/30 p-6 rounded-[32px] border border-red-100 mt-2 mb-4">
                     <View className="flex-row items-center mb-4">
@@ -389,7 +419,7 @@ export default function TickerDetailScreen() {
                     <MessageSquareText size={20} color="white" />
                     <Text className="text-white font-black text-lg ml-3">Tirar dúvidas sobre {id}</Text>
                 </TouchableOpacity>
-
+                <InsightButton ticker={id as string} />
             </ScrollView>
 
             <AiOptionsModal 
@@ -407,6 +437,7 @@ export default function TickerDetailScreen() {
                 ticker={id as string}
                 loading={isSavingAsset}
             /> */}
+            
         </View>
     );
 }

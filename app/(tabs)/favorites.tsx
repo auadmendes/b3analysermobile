@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-expo';
 import { router } from 'expo-router';
-import { Heart, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { StarIcon, TrendingDown, TrendingUp } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
@@ -45,7 +45,7 @@ export default function FavoritesScreen() {
           <Text className="text-4xl font-black text-slate-900">Favoritos</Text>
         </View>
         <View className="bg-rose-100 p-3 rounded-2xl">
-          <Heart size={24} color="#ef4444" fill="#ef4444" />
+          <StarIcon size={24} color="#eab308" fill="#eab308" />          
         </View>
       </View>
 

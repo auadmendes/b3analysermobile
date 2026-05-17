@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Heart, Home, MessageSquare, Search } from 'lucide-react-native'; // Importamos Heart
+import { Home, MessageSquare, Search, StarIcon } from 'lucide-react-native'; // Importamos Heart
 
 export default function TabLayout() {
   return (
@@ -33,10 +33,19 @@ export default function TabLayout() {
 
       {/* Nova Aba de Favoritos */}
       <Tabs.Screen
-        name="favorites" 
+        name="favorites"
         options={{
-          title: 'Favoritos',
-          tabBarIcon: ({ color }) => <Heart size={24} color={color} />,
+          title: "Favoritos",
+          tabBarActiveTintColor: "#eab308",
+          tabBarInactiveTintColor: "#9ca3af",
+
+          tabBarIcon: ({ focused, color }) => (
+            <StarIcon
+              size={24}
+              color={focused ? "#eab308" : "#9ca3af"}
+              fill={focused ? "#eab308" : "transparent"}
+            />
+          ),
         }}
       />
 
@@ -45,6 +54,36 @@ export default function TabLayout() {
         options={{
           title: 'Chat IA',
           tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chat/sessions"        
+        options={{
+          href: null, // Esconde esta aba da barra de navegação
+        }}
+      />
+      <Tabs.Screen
+        name="profile/dashboard"        
+        options={{
+          href: null, // Esconde esta aba da barra de navegação
+        }}
+      />
+      <Tabs.Screen
+        name="profile/reports"        
+        options={{
+          href: null, // Esconde esta aba da barra de navegação
+        }}
+      />
+      <Tabs.Screen
+        name="profile/tickers"        
+        options={{
+          href: null, // Esconde esta aba da barra de navegação
+        }}
+      />
+      <Tabs.Screen
+        name="profile/index"        
+        options={{
+          href: null, // Esconde esta aba da barra de navegação
         }}
       />
 

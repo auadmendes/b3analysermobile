@@ -159,9 +159,13 @@ export default function DividendsScreen() {
                   </View>
                   <View>
                     <Text className="font-black text-slate-900 text-lg">{item.ticker}</Text>
-                    <Text className={`text-[10px] font-black uppercase ${item.status === 'pago' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                      {item.status}
-                    </Text>
+                    <Text className={`text-[10px] font-black uppercase ${
+  item.status === 'pago' ? 'text-emerald-500' : 
+  item.status === 'confirmado' ? 'text-blue-500' : 
+  'text-slate-400 italic' // Cinza e itálico para 'estimado'
+}`}>
+  {item.status}
+</Text>
                   </View>
                 </View>
                 <Text className="text-slate-900 font-black text-base">R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</Text>

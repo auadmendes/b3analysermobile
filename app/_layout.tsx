@@ -1,17 +1,18 @@
 import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import React, { useEffect, useState } from "react"; // Adicionado useState
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message'; // 1. Imports do Toast
+// Importe o seu componente personalizado
+import { CustomSplashScreen } from '@/components/SplashScreen';
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 
 import "../global.css";
 
-// 2. Configuração Visual Premium para o Toast
+// Configuração Visual do Toast
 const toastConfig = {
   success: (props: any) => (
     <BaseToast
@@ -53,9 +54,23 @@ function InitialLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  
+  // Estado para garantir que a Splash H3B3 apareça por um tempo mínimo
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    // Força a exibição da Splash por 2 segundos para dar branding
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Só executa o redirecionamento quando o Clerk carregar E o tempo mínimo passar
+    if (!isLoaded || !isReady) return;
+
     const inAuthGroup = segments[0] === "login";
 
     if (isSignedIn && inAuthGroup) {
@@ -63,14 +78,11 @@ function InitialLayout() {
     } else if (!isSignedIn && !inAuthGroup) {
       router.replace("/login");
     }
-  }, [isLoaded, isSignedIn, segments]);
+  }, [isLoaded, isSignedIn, segments, isReady]);
 
-  if (!isLoaded) {
-    return (
-      <View className="flex-1 bg-white justify-center items-center">
-        <ActivityIndicator size="large" color="#4f46e5" />
-      </View>
-    );
+  // Enquanto o Clerk ou o timer não estiverem prontos, mostra H3B3
+  if (!isLoaded || !isReady) {
+    return <CustomSplashScreen />;
   }
 
   return (
@@ -83,19 +95,16 @@ function InitialLayout() {
 }
 
 export default function RootLayout() {
-  if (!publishableKey) return null;
+  if (!publishableKey) {
+    return null; // Ou uma mensagem de erro avisando que falta a chave do Clerk
+  }
 
-return (
+  return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
-        {/* 2. Envolva o layout principal com o GestureHandlerRootView */}
         <GestureHandlerRootView style={{ flex: 1 }}>
-          
           <InitialLayout />
-          
-          {/* O Toast pode ficar dentro ou fora, mas o layout do app PRECISA estar dentro */}
           <Toast config={toastConfig} topOffset={60} /> 
-          
         </GestureHandlerRootView>
       </ClerkLoaded>
     </ClerkProvider>

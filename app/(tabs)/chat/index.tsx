@@ -1,8 +1,8 @@
 import { useUser } from '@clerk/clerk-expo';
-import * as Clipboard from 'expo-clipboard'; // Importação do Clipboard
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Bot, ChevronLeft, Copy, Send } from 'lucide-react-native'; // Importei o ícone Copy
-import React, { useEffect, useRef, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Bot, ChevronLeft, History, PlusCircle, Send } from 'lucide-react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -15,32 +15,77 @@ import {
   View,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import Toast from 'react-native-toast-message'; // Para avisar que copiou
+import Toast from 'react-native-toast-message';
 
 export default function ChatScreen() {
-  const { ticker } = useLocalSearchParams();
+  const { ticker, sessionId: paramSessionId } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useUser();
   
   const [message, setMessage] = useState('');
   const [chatLog, setChatLog] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetchingHistory, setFetchingHistory] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // --- FUNÇÃO PARA COPIAR ---
-  const copyToClipboard = async (text: string) => {
-    await Clipboard.setStringAsync(text);
-    Toast.show({
-      type: 'success',
-      text1: 'Copiado!',
-      text2: 'Mensagem copiada para a área de transferência.',
-      position: 'bottom',
-      bottomOffset: 120
-    });
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  const handleNewChat = () => {
+    setMessage('');
+    setSessionId(null);
+    router.setParams({ sessionId: '' });
+
+    const initialText = ticker 
+      ? `Olá! Notei que você está analisando **${ticker}**. Como posso te ajudar hoje?` 
+      : "Olá! Sou seu assistente **B3 Analyser**. No que posso ajudar?";
+    setChatLog([{ role: 'assistant', text: initialText }]);
+    
+    Toast.show({ type: 'info', text1: 'Nova conversa iniciada' });
   };
 
-  // Listeners do teclado (Mantidos)
+  const copyToClipboard = async (text: string) => {
+    await Clipboard.setStringAsync(text);
+    Toast.show({ type: 'success', text1: 'Copiado!', position: 'bottom', bottomOffset: 120 });
+  };
+
+  const loadHistory = async (id: string) => {
+    if (!id) return;
+    setFetchingHistory(true);
+    try {
+      const response = await fetch(`${API_URL}/chat/history/${id}`);
+      const json = await response.json();
+      if (json.success && json.history) {
+        setChatLog(json.history.map((m: any) => ({ 
+          role: m.role, 
+          text: typeof m.content === 'string' ? m.content : "Conteúdo inválido." 
+        })));
+      }
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Erro ao carregar histórico' });
+    } finally {
+      setFetchingHistory(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      setChatLog([]);
+      
+      if (paramSessionId) {
+        setSessionId(paramSessionId as string);
+        loadHistory(paramSessionId as string);
+      } else {
+        setSessionId(null);
+        const initialText = ticker 
+          ? `Olá! Notei que você está analisando **${ticker}**. Como posso te ajudar hoje?` 
+          : "Olá! Sou seu assistente **B3 Analyser**. No que posso ajudar?";
+        setChatLog([{ role: 'assistant', text: initialText }]);
+      }
+    }, [paramSessionId, ticker])
+  );
+
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -55,18 +100,7 @@ export default function ChatScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    const initialText = ticker 
-      ? `Olá! Notei que você está analisando **${ticker}**. Como posso te ajudar hoje?` 
-      : "Olá! Sou seu assistente **B3 Analyser**. No que posso ajudar?";
-    setChatLog([{ role: 'assistant', text: initialText }]);
-  }, [ticker]);
-
-  const scrollToBottom = () => {
-    scrollViewRef.current?.scrollToEnd({ animated: true });
-  };
-
-const sendMessage = async () => {
+  const sendMessage = async () => {
     if (!message.trim() || loading) return;
     
     const userMsg = message;
@@ -75,20 +109,31 @@ const sendMessage = async () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: ticker ? `[CONTEXTO: ${ticker}] ${userMsg}` : userMsg,
-          // ALTERAÇÃO AQUI: Usando o ID real do usuário logado no Clerk
-          user_id: user?.id || "anonimo" 
+          message: ticker && chatLog.length < 2 ? `[CONTEXTO: ${ticker}] ${userMsg}` : userMsg,
+          user_id: user?.id || "anonimo",
+          session_id: sessionId || null
         })
       });
 
+      if (!response.ok) {
+        throw new Error("Resposta do servidor com erro 500 ou 404.");
+      }
+
       const json = await response.json();
-      setChatLog(prev => [...prev, { role: 'assistant', text: json.response }]);
+      if (json.session_id && !sessionId) setSessionId(json.session_id);
+      
+      // Garante que o texto injetado seja uma string válida
+      const aiResponseText = json.response && typeof json.response === 'string' 
+        ? json.response 
+        : "Não consegui processar essa análise. Tente novamente.";
+
+      setChatLog(prev => [...prev, { role: 'assistant', text: aiResponseText }]);
     } catch (error) {
-      setChatLog(prev => [...prev, { role: 'assistant', text: "Erro na conexão. Tente novamente." }]);
+      setChatLog(prev => [...prev, { role: 'assistant', text: "Erro ao conectar com o analista. Verifique seu servidor Python." }]);
     } finally {
       setLoading(false);
     }
@@ -102,83 +147,72 @@ const sendMessage = async () => {
         <TouchableOpacity onPress={() => router.back()} className="p-2 bg-slate-50 rounded-full mr-4">
           <ChevronLeft size={20} color="#0f172a" />
         </TouchableOpacity>
-        <Text className="text-xl font-black text-slate-900">Chat B3</Text>
+        <View className="flex-1">
+          <Text className="text-xl font-black text-slate-900">Chat Inteligente</Text>
+          {ticker && <Text className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">{ticker}</Text>}
+        </View>
+        
+        <TouchableOpacity onPress={handleNewChat} className="p-2 mr-2">
+           <PlusCircle size={22} color="#4f46e5" />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => router.push('/chat/sessions')} className="p-2">
+           <History size={22} color="#64748b" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
         ref={scrollViewRef}
         className="flex-1 px-4" 
         contentContainerStyle={{ paddingVertical: 20 }}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={scrollToBottom}
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
       >
-        {chatLog.map((msg, i) => (
-          <View key={i} className={`mb-6 flex-row ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'assistant' && (
-              <View className="bg-indigo-600 w-8 h-8 rounded-full items-center justify-center mr-2 mt-1">
-                <Bot size={16} color="white" />
-              </View>
-            )}
-            
-            {/* TouchableOpacity para permitir clicar e copiar */}
-            <TouchableOpacity 
-              activeOpacity={0.8}
-              onLongPress={() => copyToClipboard(msg.text)} // COPIA NO CLIQUE LONGO
-              className={`max-w-[85%] p-4 rounded-3xl ${
-                msg.role === 'user' 
-                  ? 'bg-indigo-600 rounded-tr-none' 
-                  : 'bg-slate-100 rounded-tl-none border border-slate-200'
-              }`}
-            >
-              {msg.role === 'assistant' ? (
-                <Markdown style={markdownStyles}>{msg.text}</Markdown>
-              ) : (
-                <Text className="text-white leading-5 font-medium">{msg.text}</Text>
-              )}
-              
-              {/* Indicador discreto de que é possível copiar */}
+        {fetchingHistory ? (
+          <ActivityIndicator color="#4f46e5" className="mt-10" />
+        ) : (
+          chatLog.map((msg, i) => (
+            <View key={i} className={`mb-6 flex-row ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
-                <View className="flex-row justify-end mt-2 opacity-20">
-                  <Copy size={10} color="#64748b" />
+                <View className="bg-indigo-600 w-8 h-8 rounded-full items-center justify-center mr-2 mt-1">
+                  <Bot size={16} color="white" />
                 </View>
               )}
-            </TouchableOpacity>
-          </View>
-        ))}
-
-        {loading && (
-          <View className="flex-row items-center ml-10 mb-6">
-            <ActivityIndicator size="small" color="#4f46e5" />
-            <Text className="text-slate-400 italic text-xs ml-3 font-medium">Analisando...</Text>
-          </View>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onLongPress={() => copyToClipboard(msg.text)}
+                className={`max-w-[85%] p-4 rounded-3xl ${
+                  msg.role === 'user' ? 'bg-indigo-600 rounded-tr-none' : 'bg-slate-100 rounded-tl-none border border-slate-200'
+                }`}
+              >
+                {msg.role === 'assistant' ? (
+                  <Markdown style={markdownStyles}>
+                    {typeof msg.text === 'string' ? msg.text : "Erro visual de dados."}
+                  </Markdown>
+                ) : (
+                  <Text className="text-white leading-5 font-medium">
+                    {typeof msg.text === 'string' ? msg.text : ""}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ))
         )}
+        {loading && <ActivityIndicator size="small" color="#4f46e5" className="ml-10 mb-6" />}
       </ScrollView>
 
-      <View style={{ 
-          marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
-          backgroundColor: 'white',
-          borderTopWidth: 1,
-          borderTopColor: '#f1f5f9'
-      }}>
-        <View className="p-4 flex-row items-end">
+      <View style={{ marginBottom: Platform.OS === 'android' ? keyboardHeight : 0 }}>
+        <View className="p-4 flex-row items-end border-t border-slate-100 bg-white">
           <TextInput
-            className="flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100 mr-3 text-slate-900 max-h-32"
-            placeholder="Digite sua dúvida..."
-            placeholderTextColor="#94a3b8"
+            className="flex-1 bg-slate-50 p-4 rounded-2xl text-slate-900 max-h-32"
+            placeholder="Digite aqui..."
             value={message}
             onChangeText={setMessage}
             multiline
-            onFocus={() => setTimeout(scrollToBottom, 200)}
           />
-          <TouchableOpacity 
-            onPress={sendMessage} 
-            disabled={loading || !message.trim()}
-            className={`p-4 rounded-2xl shadow-md ${message.trim() ? 'bg-indigo-600' : 'bg-slate-200'}`}
-          >
-            <Send size={20} color={message.trim() ? 'white' : '#94a3b8'} />
+          <TouchableOpacity onPress={sendMessage} className="ml-3 p-4 bg-indigo-600 rounded-2xl shadow-md">
+            <Send size={20} color="white" />
           </TouchableOpacity>
         </View>
-        {keyboardHeight === 0 && <View style={{ height: Platform.OS === 'ios' ? 30 : 10 }} />}
       </View>
     </View>
   );
@@ -187,8 +221,5 @@ const sendMessage = async () => {
 const markdownStyles = StyleSheet.create({
   body: { color: '#334155', fontSize: 15, lineHeight: 22 },
   strong: { fontWeight: 'bold', color: '#0f172a' },
-  heading3: { fontSize: 17, fontWeight: '800', marginTop: 10, marginBottom: 5, color: '#4f46e5' },
-  paragraph: { marginTop: 0, marginBottom: 8 },
-  bullet_list: { marginBottom: 8 },
-  list_item: { flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 4 },
+  heading3: { fontSize: 17, fontWeight: '800', marginTop: 10, color: '#4f46e5' },
 });

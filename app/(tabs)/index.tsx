@@ -45,6 +45,8 @@ export default function PortfolioScreen() {
   const [isModalVisible, setModalVisible] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
 
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+
   // --- CÁLCULOS DE PATRIMÔNIO ---
   // useMemo evita que o cálculo seja refeito desnecessariamente a cada render
   const totals = useMemo(() => {
@@ -74,6 +76,36 @@ export default function PortfolioScreen() {
     if (userLoaded && user?.id) fetchPortfolio();
   }, [userLoaded, user?.id]);
 
+  useEffect(() => {
+  const fetchMonthlyIncome = async () => {
+    if (!user?.id) return;
+
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/dividends/${user.id}`);
+      const json = await response.json();
+
+      if (json.success && json.dividends) {
+        // Pega o mês e ano atual no formato "YYYY-MM" (ex: "2026-05")
+        const currentMonthYear = new Date().toISOString().slice(0, 7);
+
+        // Soma apenas os dividendos deste mês
+        const total = json.dividends.reduce((acc: number, item: any) => {
+          if (item.date.startsWith(currentMonthYear)) {
+            return acc + (item.amount || 0);
+          }
+          return acc;
+        }, 0);
+
+        setMonthlyIncome(total);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar renda mensal:", error);
+    }
+  };
+
+  fetchMonthlyIncome();
+}, [user?.id]);
+
   const fetchPortfolio = async () => {
     try {
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/portfolio?userId=${user?.id}`);
@@ -92,6 +124,11 @@ export default function PortfolioScreen() {
     setSelectedAsset({ ...asset });
     setModalVisible(true);
   };
+
+  const handleGoToprofile = () => {
+    console.log('testando ir para o profile')
+    router.push("./profile" as any);
+  }
 
   const saveEdit = async () => {
     try {
@@ -148,9 +185,19 @@ export default function PortfolioScreen() {
       <View className="pt-16 px-6 pb-4 flex-row justify-between items-center bg-white border-b border-slate-50">
         <View className="flex-row items-center">
           {user?.imageUrl ? (
-            <Image source={{ uri: user.imageUrl }} className="w-10 h-10 rounded-full border border-slate-100" />
+            <TouchableOpacity
+              onPress={handleGoToprofile}
+            >
+              <Image 
+                source={{ uri: user.imageUrl }} 
+                className="w-10 h-10 rounded-full border border-slate-100" 
+              />
+            </TouchableOpacity>
           ) : (
-            <View className="bg-slate-100 p-2 rounded-full"><UserIcon size={20} color="#64748b" /></View>
+            <View              
+              className="bg-slate-100 p-2 rounded-full">
+                <UserIcon size={20} color="#64748b" />
+            </View>
           )}
           <View className="ml-3">
             <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Patrimônio</Text>
@@ -199,21 +246,29 @@ export default function PortfolioScreen() {
           totalInvested={totals.totalInvested} 
         />
 
-          <TouchableOpacity 
-              onPress={() => router.push("/dividends" as any)}
-              className="bg-emerald-500 p-6 rounded-[32px] mb-8 flex-row items-center justify-between shadow-lg shadow-emerald-100"
-            >
-              <View className="flex-1">
-                <View className="flex-row items-center mb-1">
-                  <Calendar size={14} color="white" />
-                  <Text className="text-emerald-100 text-[9px] font-black ml-2 uppercase tracking-[2px]">Agenda de Renda</Text>
-                </View>
-                <Text className="text-white text-xl font-black">R$ 450,80 <Text className="text-sm font-medium">este mês</Text></Text>
-              </View>
-              <View className="bg-white/20 p-2 rounded-full">
-                <ChevronRight size={20} color="white" />
-              </View>
-          </TouchableOpacity>
+      <TouchableOpacity 
+          onPress={() => router.push("/dividends" as any)}
+          className="bg-emerald-500 p-6 rounded-[32px] mb-8 flex-row items-center justify-between shadow-lg shadow-emerald-100"
+        >
+          <View className="flex-1">
+            <View className="flex-row items-center mb-1">
+              <Calendar size={14} color="white" />
+              <Text className="text-emerald-100 text-[9px] font-black ml-2 uppercase tracking-[2px]">
+                Agenda de Renda
+              </Text>
+            </View>
+            
+            {/* Valor Dinâmico Aqui */}
+            <Text className="text-white text-xl font-black">
+              R$ {monthlyIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+              <Text className="text-sm font-medium"> este mês</Text>
+            </Text>
+          </View>
+
+          <View className="bg-white/20 p-2 rounded-full">
+            <ChevronRight size={20} color="white" />
+          </View>
+      </TouchableOpacity>
         {/* Card IA Analyser */}
         <TouchableOpacity
           onPress={() => router.push("/analysis")}
