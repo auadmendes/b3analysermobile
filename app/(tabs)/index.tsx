@@ -1,4 +1,4 @@
-// import { WalletChart } from '@/components/walletChart';
+import { SmartInvestmentCard } from '@/components/smartInvestmentCard';
 import { WalletChart } from '@/components/walletChart';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as Haptics from 'expo-haptics';
@@ -41,6 +41,7 @@ export default function PortfolioScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [assets, setAssets] = useState<any[]>([]);
+  const [rawDividends, setRawDividends] = useState<any[]>([]); // 🌟 Guardando a lista cheia de dividendos para o cálculo
 
   const [isModalVisible, setModalVisible] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
@@ -48,19 +49,12 @@ export default function PortfolioScreen() {
   const [monthlyIncome, setMonthlyIncome] = useState(0);
 
   // --- CÁLCULOS DE PATRIMÔNIO ---
-  // useMemo evita que o cálculo seja refeito desnecessariamente a cada render
   const totals = useMemo(() => {
-      // 1. Verificação de segurança: Se assets for nulo, indefinido ou não for lista, retorna 0
       if (!assets || !Array.isArray(assets)) {
-          return {
-              totalInvested: 0,
-              assetCount: 0
-          };
+          return { totalInvested: 0, assetCount: 0 };
       }
 
-      // 2. Cálculo seguro
       const totalValue = assets.reduce((acc, asset) => {
-          // Garantimos que quantity e averagePrice sejam números para não somar NaN
           const qty = Number(asset.quantity) || 0;
           const price = Number(asset.averagePrice) || 0;
           return acc + (qty * price);
@@ -72,45 +66,64 @@ export default function PortfolioScreen() {
       };
   }, [assets]);
 
+  // 🌟 Mapeia o último dividendo pago por cada Ticker usando o histórico consolidado
+  const latestDividendsMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!rawDividends || rawDividends.length === 0) return map;
+
+    // Ordena os dividendos do mais antigo para o mais recente para capturar o último valor processado
+    const sorted = [...rawDividends].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    sorted.forEach(div => {
+      if (div.ticker && div.amount) {
+        // Assume o último dividendo unitário registrado (se sua API salvar o valor por cota)
+        // Se a sua API salva o valor TOTAL recebido, dividimos pela quantidade atual de cotas
+        map[div.ticker] = Number(div.amountPerShare) || Number(div.amount) || 0;
+      }
+    });
+    return map;
+  }, [rawDividends]);
+
   useEffect(() => {
     if (userLoaded && user?.id) fetchPortfolio();
   }, [userLoaded, user?.id]);
 
   useEffect(() => {
-  const fetchMonthlyIncome = async () => {
-    if (!user?.id) return;
+    const fetchMonthlyIncome = async () => {
+      if (!user?.id) return;
 
-    try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/dividends/${user.id}`);
-      const json = await response.json();
+      try {
+        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/dividends/${user.id}`);
+        const json = await response.json();
 
-      if (json.success && json.dividends) {
-        // Pega o mês e ano atual no formato "YYYY-MM" (ex: "2026-05")
-        const currentMonthYear = new Date().toISOString().slice(0, 7);
+        if (json.success && json.dividends) {
+          setRawDividends(json.dividends); // 🌟 Salvando a lista bruta para os cards usarem abaixo
 
-        // Soma apenas os dividendos deste mês
-        const total = json.dividends.reduce((acc: number, item: any) => {
-          if (item.date.startsWith(currentMonthYear)) {
-            return acc + (item.amount || 0);
-          }
-          return acc;
-        }, 0);
+          const currentMonthYear = new Date().toISOString().slice(0, 7);
 
-        setMonthlyIncome(total);
+          const total = json.dividends.reduce((acc: number, item: any) => {
+            if (item.date.startsWith(currentMonthYear)) {
+              return acc + (item.amount || 0);
+            }
+            return acc;
+          }, 0);
+
+          setMonthlyIncome(total);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar renda mensal:", error);
       }
-    } catch (error) {
-      console.error("Erro ao buscar renda mensal:", error);
-    }
-  };
+    };
 
-  fetchMonthlyIncome();
-}, [user?.id]);
+    fetchMonthlyIncome();
+  }, [user?.id]);
 
   const fetchPortfolio = async () => {
     try {
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/portfolio?userId=${user?.id}`);
       const json = await response.json();
       setAssets(json);
+      //console.log("Carteira carregada:", json);
     } catch (error) {
       console.error("Erro ao carregar carteira:", error);
     } finally {
@@ -126,9 +139,8 @@ export default function PortfolioScreen() {
   };
 
   const handleGoToprofile = () => {
-    console.log('testando ir para o profile')
     router.push("./profile" as any);
-  }
+  };
 
   const saveEdit = async () => {
     try {
@@ -185,26 +197,21 @@ export default function PortfolioScreen() {
       <View className="pt-16 px-6 pb-4 flex-row justify-between items-center bg-white border-b border-slate-50">
         <View className="flex-row items-center">
           {user?.imageUrl ? (
-            <TouchableOpacity
-              onPress={handleGoToprofile}
-            >
+            <TouchableOpacity onPress={handleGoToprofile}>
               <Image 
                 source={{ uri: user.imageUrl }} 
                 className="w-10 h-10 rounded-full border border-slate-100" 
               />
             </TouchableOpacity>
           ) : (
-            <View              
-              className="bg-slate-100 p-2 rounded-full">
+            <View className="bg-slate-100 p-2 rounded-full">
                 <UserIcon size={20} color="#64748b" />
             </View>
           )}
           <View className="ml-3">
             <Text className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Patrimônio</Text>
             <Text className="text-slate-900 text-xl font-black italic">Minha Carteira</Text>
-
           </View>
-
         </View>
         
         <TouchableOpacity onPress={() => signOut()} className="p-2 bg-slate-50 rounded-2xl">
@@ -237,16 +244,15 @@ export default function PortfolioScreen() {
              <Text className="text-slate-400 text-[10px] font-black uppercase mb-1">Ativos</Text>
              <Text className="text-slate-900 text-lg font-black">{totals.assetCount} Tickers</Text>
           </View>
-
         </View>
-
 
         <WalletChart 
           assets={assets} 
           totalInvested={totals.totalInvested} 
         />
 
-      <TouchableOpacity 
+        {/* Agenda de Renda */}
+        <TouchableOpacity 
           onPress={() => router.push("/dividends" as any)}
           className="bg-emerald-500 p-6 rounded-[32px] mb-8 flex-row items-center justify-between shadow-lg shadow-emerald-100"
         >
@@ -258,7 +264,6 @@ export default function PortfolioScreen() {
               </Text>
             </View>
             
-            {/* Valor Dinâmico Aqui */}
             <Text className="text-white text-xl font-black">
               R$ {monthlyIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
               <Text className="text-sm font-medium"> este mês</Text>
@@ -268,7 +273,8 @@ export default function PortfolioScreen() {
           <View className="bg-white/20 p-2 rounded-full">
             <ChevronRight size={20} color="white" />
           </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+
         {/* Card IA Analyser */}
         <TouchableOpacity
           onPress={() => router.push("/analysis")}
@@ -287,6 +293,12 @@ export default function PortfolioScreen() {
           </View>
         </TouchableOpacity>
 
+        <SmartInvestmentCard 
+          userId={user?.id || ""} 
+          apiUrl={process.env.EXPO_PUBLIC_API_URL || ""}
+          onSuccess={() => fetchPortfolio()} // Opcional: atualiza os dados ao simular
+        />
+
         <Text className="text-slate-900 font-black text-lg mb-5 ml-1">Seus Ativos</Text>
 
         {loading ? (
@@ -299,11 +311,19 @@ export default function PortfolioScreen() {
           assets.map((item, index) => {
             const isFII = item.type === 'FII' || item.type === 'FUNDO_IMOBILIARIO';
             
-            // Cálculo da porcentagem de alocação deste ativo no montante total
-            const assetValue = Number(item.quantity) * Number(item.averagePrice);
+            const userQuantity = Number(item.quantity) || 0;
+            const assetValue = userQuantity * (Number(item.averagePrice) || 0);
+
             const allocationPercent = totals.totalInvested > 0 
                 ? ((assetValue / totals.totalInvested) * 100).toFixed(1) 
                 : 0;
+
+            // 🌟 Mapeia direto o que veio mastigado do seu servidor Python:
+            const requiredTotalCopies = item.magicNumberRequiredCopies || 0;
+            const missingCopies = item.missingCopies || 0;
+            const missingToMagicNumber = item.missingAmount || 0;
+            const reachedMagicNumber = item.reachedMagicNumber || false;
+            const hasDividendData = (item.lastDividend || 0) > 0;
 
             return (
               <TouchableOpacity
@@ -312,31 +332,51 @@ export default function PortfolioScreen() {
                 onLongPress={() => handleEdit(item)}
                 delayLongPress={350}
                 activeOpacity={0.7}
-                className="bg-white border border-slate-100 p-5 rounded-[28px] mb-4 flex-row items-center justify-between shadow-sm"
+                className="bg-white border border-slate-100 p-5 rounded-[28px] mb-4 shadow-sm"
               >
-                <View className="flex-row items-center flex-1">
-                  <View className={`${isFII ? 'bg-amber-100' : 'bg-indigo-50'} p-4 rounded-2xl mr-4`}>
-                    <Wallet size={20} color={isFII ? '#d97706' : '#4f46e5'} />
-                  </View>
-                  <View className="flex-1">
-                    <View className="flex-row items-center">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center flex-1">
+                    <View className={`${isFII ? 'bg-amber-100' : 'bg-indigo-50'} p-4 rounded-2xl mr-4`}>
+                      <Wallet size={20} color={isFII ? '#d97706' : '#4f46e5'} />
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row items-center">
                         <Text className="font-black text-slate-950 text-lg tracking-tight mr-2">{item.ticker}</Text>
                         <View className="bg-slate-100 px-2 py-0.5 rounded-lg">
-                            <Text className="text-slate-500 text-[10px] font-black">{allocationPercent}%</Text>
+                          <Text className="text-slate-500 text-[10px] font-black">{allocationPercent}%</Text>
                         </View>
+                      </View>
+                      <Text className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
+                        {isFII ? 'Fundo Imobiliário' : 'Ação B3'}
+                      </Text>
                     </View>
-                    <Text className="text-slate-400 text-[9px] font-black uppercase tracking-tighter">
-                       {isFII ? 'Fundo Imobiliário' : 'Ação B3'}
-                    </Text>
+                  </View>
+
+                  <View className="flex-row items-center">
+                    <View className="items-end mr-3">
+                      <Text className="font-black text-slate-900 text-base">{userQuantity} un.</Text>
+                      <Text className="text-slate-300 text-[8px] font-bold uppercase">R$ {assetValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</Text>
+                    </View>
+                    <ChevronRight size={16} color="#cbd5e1" />
                   </View>
                 </View>
 
-                <View className="flex-row items-center">
-                  <View className="items-end mr-3">
-                    <Text className="font-black text-slate-900 text-base">{item.quantity} un.</Text>
-                    <Text className="text-slate-300 text-[8px] font-bold uppercase">R$ {assetValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                  <ChevronRight size={16} color="#cbd5e1" />
+                {/* --- SEÇÃO DO NÚMERO MÁGICO PERFEITA --- */}
+                <View className="mt-3 pt-3 border-t border-slate-50 flex-row items-center">
+                  <View className={`w-1.5 h-1.5 rounded-full mr-2 ${reachedMagicNumber ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
+                  {!hasDividendData ? (
+                    <Text className="text-slate-400 text-[10px] font-medium">
+                      Aguardando histórico de proventos...
+                    </Text>
+                  ) : reachedMagicNumber ? (
+                    <Text className="text-emerald-600 text-[10px] font-bold">
+                      🎉 Meta atingida! Número mágico alcançado ({requiredTotalCopies} cotas).
+                    </Text>
+                  ) : (
+                    <Text className="text-slate-500 text-[10px] font-medium">
+                      Faltam <Text className="font-bold text-slate-800">{missingCopies} cotas</Text> (Aprox. <Text className="font-black text-indigo-600">R$ {missingToMagicNumber.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>) para o número mágico.
+                    </Text>
+                  )}
                 </View>
               </TouchableOpacity>
             );
